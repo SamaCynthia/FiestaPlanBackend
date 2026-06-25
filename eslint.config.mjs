@@ -26,7 +26,6 @@ export default tseslint.config(
   },
   {
     rules: {
-      // DESACTIVAMOS LAS REGLAS ESTRICTAS MOLESTAS PARA LA BASE DE DATOS TEMPORAL
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
