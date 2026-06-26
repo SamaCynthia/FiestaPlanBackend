@@ -23,24 +23,19 @@ export class UsersController {
     return this.usersService.obtenerTodosLosUsuarios();
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @UseGuards(JwtAuthGuard)
   @Get()
   async getPerfil(@Request() req) {
     return this.usersService.findById(req.user.sub);
   }
 
-  // 2. DERECHO DE RECTIFICACIÓN (Actualizar perfil)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @UseGuards(JwtAuthGuard)
   @Patch('actualizar')
   async actualizarCuenta(@Request() req, @Body() body: any) {
     return this.usersService.actualizarCuenta(req.user.sub, body);
   }
 
-  // 3. DERECHO DE CANCELACIÓN Y OPOSICIÓN (Anonimizar)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @UseGuards(JwtAuthGuard)
   @Delete('cancelar')
   async cancelarCuenta(@Request() req) {
     return this.usersService.anonimizarCuenta(req.user.sub);
