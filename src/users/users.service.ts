@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import { ArcoStrategy, RectificacionStrategy, CancelacionStrategy } from './interfaces/strategy.interface';
 
 @Injectable()
 export class UsersService {
@@ -25,41 +25,24 @@ export class UsersService {
     return newUser;
   }
 
-  // Lógica ARCO: Cancelación / Anonimización (Issue 5)
+  // Lógica ARCO: Cancelación / Anonimización delegada a Strategy
   async anonimizarCuenta(id: number) {
-    const userIndex = this.DB.findIndex((u) => u.id === id);
-    if (userIndex === -1) throw new NotFoundException('Usuario no encontrado');
-
-    // Destruimos los datos personales, pero mantenemos el registro para estadísticas
-    this.DB[userIndex].nombre = 'Usuario Anonimizado';
-    this.DB[userIndex].email = `eliminado_${id}@fiestaplan.local`;
-    this.DB[userIndex].password = 'ELIMINADO';
-    this.DB[userIndex].fecha_eliminacion = new Date();
-
-    return { message: 'Cuenta cancelada y anonimizada según la LGPDPPSO' };
+    const estrategia = new CancelacionStrategy();
+    return this.procesarArco(estrategia, id);
   }
 
-  // 2. Agrega esta nueva función para la Rectificación (ARCO)
+  // Lógica ARCO: Rectificación delegada a Strategy
   async actualizarCuenta(id: number, datosNuevos: any) {
+    const estrategia = new RectificacionStrategy();
+    return this.procesarArco(estrategia, id, datosNuevos);
+  }
+
+  // Procesador central del patrón Contexto
+  private async procesarArco(strategy: ArcoStrategy, id: number, datos?: any) {
     const userIndex = this.DB.findIndex((u) => u.id === id);
     if (userIndex === -1) throw new NotFoundException('Usuario no encontrado');
-
-    // Actualización dinámica: Revisamos qué mandó el usuario en la petición
-    if (datosNuevos.nombre) {
-      this.DB[userIndex].nombre = datosNuevos.nombre;
-    }
-
-    // Si manda una nueva contraseña, la volvems a hashear por seguridad
-    if (datosNuevos.password) {
-      this.DB[userIndex].password = await bcrypt.hash(datosNuevos.password, 10);
-    }
-
-    // Extraemos la contraseña para no devolverla en la respuesta (por seguridad)
-    const { password, ...usuarioActualizado } = this.DB[userIndex];
-
-    return {
-      message: 'Cuenta (Rectificación) actualizada exitosamente',
-      user: usuarioActualizado,
-    };
+    
+    // Ejecutamos y esperamos la estrategia de manera asíncrona
+    return await strategy.ejecutar(userIndex, this.DB, datos);
   }
 }
