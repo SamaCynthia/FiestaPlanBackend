@@ -7,7 +7,10 @@ import {
 import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
-import { AUDIT_LOG_KEY, AuditLogOptions } from '../decorators/audit-log.decorator';
+import {
+  AUDIT_LOG_KEY,
+  AuditLogOptions,
+} from '../decorators/audit-log.decorator';
 import { AuditLogsService } from '../audit-logs.service';
 import { UsersService } from '../../users/users.service';
 
@@ -55,7 +58,10 @@ export class AuditLogInterceptor implements NestInterceptor {
         // Evento fallido
         const statusCode = error.status || 500;
         // Mensaje de error amigable y libre de PII
-        const errorMessage = error.response?.message || error.message || 'Error interno del servidor';
+        const errorMessage =
+          error.response?.message ||
+          error.message ||
+          'Error interno del servidor';
 
         let resolvedAction = accion;
         if (accion === 'login') {
@@ -69,7 +75,9 @@ export class AuditLogInterceptor implements NestInterceptor {
           accion: resolvedAction,
           modulo,
           entidadTipo,
-          errorMessage: Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage,
+          errorMessage: Array.isArray(errorMessage)
+            ? errorMessage.join(', ')
+            : errorMessage,
         }).catch((err) =>
           console.error('Error al guardar log de auditoría (fallido):', err),
         );
@@ -111,7 +119,9 @@ export class AuditLogInterceptor implements NestInterceptor {
     if (accion === 'login' || accion === 'intento_login_fallido') {
       const email = req.body?.correo;
       if (email) {
-        const user = await this.usersService.findByEmail(email).catch(() => null);
+        const user = await this.usersService
+          .findByEmail(email)
+          .catch(() => null);
         if (user) {
           usuarioId = user.id;
         }
@@ -121,7 +131,9 @@ export class AuditLogInterceptor implements NestInterceptor {
     else if (accion === 'registro' && exitoso) {
       const email = req.body?.correo;
       if (email) {
-        const user = await this.usersService.findByEmail(email).catch(() => null);
+        const user = await this.usersService
+          .findByEmail(email)
+          .catch(() => null);
         if (user) {
           usuarioId = user.id;
           entidadId = user.id;
@@ -132,7 +144,9 @@ export class AuditLogInterceptor implements NestInterceptor {
     // 4. Determinar el ID del recurso afectado (entidad_id)
     if (entidadTipo === 'usuario') {
       if (req.params?.uuid) {
-        const targetUser = await this.usersService.findByUuid(req.params.uuid).catch(() => null);
+        const targetUser = await this.usersService
+          .findByUuid(req.params.uuid)
+          .catch(() => null);
         if (targetUser) {
           entidadId = targetUser.id;
         }
@@ -142,7 +156,8 @@ export class AuditLogInterceptor implements NestInterceptor {
     }
 
     // 5. Contexto técnico de red
-    let ipOrigen = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    let ipOrigen =
+      req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     if (ipOrigen && typeof ipOrigen === 'string') {
       if (ipOrigen.includes(',')) {
         ipOrigen = ipOrigen.split(',')[0].trim();

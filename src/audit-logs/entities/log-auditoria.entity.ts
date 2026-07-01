@@ -22,7 +22,12 @@ export class LogAuditoria {
   @Column({ type: 'varchar', length: 100, nullable: true })
   modulo?: string;
 
-  @Column({ name: 'entidad_tipo', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'entidad_tipo',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   entidadTipo?: string;
 
   @Column({ name: 'entidad_id', type: 'bigint', nullable: true })

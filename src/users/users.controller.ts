@@ -29,28 +29,44 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Get(':uuid')
-  @AuditLog({ accion: 'consultar_perfil', modulo: 'usuarios', entidadTipo: 'usuario' })
+  @AuditLog({
+    accion: 'consultar_perfil',
+    modulo: 'usuarios',
+    entidadTipo: 'usuario',
+  })
   async verUsuarioPorUuid(@Param('uuid') uuid: string) {
     return this.usersService.obtenerDetalleUsuario(uuid);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  @AuditLog({ accion: 'consultar_perfil', modulo: 'usuarios', entidadTipo: 'usuario' })
+  @AuditLog({
+    accion: 'consultar_perfil',
+    modulo: 'usuarios',
+    entidadTipo: 'usuario',
+  })
   async getPerfil(@Request() req) {
     return this.usersService.findByUuid(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('actualizar')
-  @AuditLog({ accion: 'editar_perfil', modulo: 'usuarios', entidadTipo: 'usuario' })
+  @AuditLog({
+    accion: 'editar_perfil',
+    modulo: 'usuarios',
+    entidadTipo: 'usuario',
+  })
   async actualizarCuenta(@Request() req, @Body() body: any) {
     return this.usersService.actualizarCuenta(req.user.sub, body);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('cancelar')
-  @AuditLog({ accion: 'eliminar_perfil', modulo: 'usuarios', entidadTipo: 'usuario' })
+  @AuditLog({
+    accion: 'eliminar_perfil',
+    modulo: 'usuarios',
+    entidadTipo: 'usuario',
+  })
   async cancelarCuenta(@Request() req) {
     return this.usersService.anonimizarCuenta(req.user.sub);
   }

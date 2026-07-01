@@ -7,10 +7,7 @@ import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([LogAuditoria]),
-    UsersModule,
-  ],
+  imports: [TypeOrmModule.forFeature([LogAuditoria]), UsersModule],
   providers: [
     AuditLogsService,
     {
