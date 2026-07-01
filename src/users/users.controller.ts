@@ -4,6 +4,7 @@ import {
   Delete,
   Patch,
   Body,
+  Param,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -17,16 +18,23 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @Roles('admin', 'moderador')
   @Get('todos')
-  async verTodosLosUsuarios() {
-    return this.usersService.obtenerTodosLosUsuarios();
+  async verUsuarios(@Request() req) {
+    return this.usersService.obtenerUsuariosSegunRol(req.user.rol);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get(':uuid')
+  async verUsuarioPorUuid(@Param('uuid') uuid: string) {
+    return this.usersService.obtenerDetalleUsuario(uuid);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
   async getPerfil(@Request() req) {
-    return this.usersService.findById(req.user.sub);
+    return this.usersService.findByUuid(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -4,16 +4,17 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Generated,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Rol } from '../../roles/entities/rol.entity';
 
 @Entity('usuarios')
 export class Usuario {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
-  @Generated('uuid')
+  @Column({ generated: 'uuid' })
   uuid!: string;
 
   @Column({ length: 100 })
@@ -25,8 +26,17 @@ export class Usuario {
   @Column({ type: 'date' })
   fecha_nacimiento!: string;
 
+  @Column({ default: 'prefiero_no_decir' })
+  genero!: string;
+
   @Column({ unique: true })
   correo!: string;
+
+  @Column({ nullable: true })
+  telefono?: string;
+
+  @Column({ nullable: true })
+  ciudad_residencia?: string;
 
   @Column({ name: 'password_hash' })
   password_hash!: string;
@@ -34,8 +44,16 @@ export class Usuario {
   @Column({ default: true })
   activo!: boolean;
 
-  @Column({ nullable: true })
-  fecha_eliminacion!: Date;
+  @Column({ default: false })
+  correo_verificado!: boolean;
+
+  // Relación dinámica con la tabla roles (rol de sistema: admin, moderador, usuario)
+  @Column({ name: 'rol_id', default: 3 })
+  rol_id!: number;
+
+  @ManyToOne(() => Rol, { eager: true })
+  @JoinColumn({ name: 'rol_id' })
+  rol!: Rol;
 
   @CreateDateColumn()
   created_at!: Date;

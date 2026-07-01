@@ -39,8 +39,7 @@ export class CancelacionStrategy implements ArcoStrategy {
     usuario.apellidos = 'Anonimizado';
     usuario.correo = `eliminado_${usuario.id}@fiestaplan.local`;
     usuario.password_hash = 'ELIMINADO';
-    usuario.activo = false; // Desactivamos el login
-    usuario.fecha_eliminacion = new Date();
+    usuario.activo = false;
 
     await repo.save(usuario);
 
