@@ -7,11 +7,7 @@ import { SharedAuthModule } from '../auth/shared/shared-auth.module';
 import { RolesModule } from '../roles/roles.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Usuario]),
-    SharedAuthModule,
-    RolesModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Usuario]), SharedAuthModule, RolesModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

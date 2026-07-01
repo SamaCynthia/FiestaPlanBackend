@@ -10,7 +10,12 @@ export class RegisterDto {
   @IsEmail({}, { message: 'El correo debe tener un formato válido' })
   correo!: string;
 
-  @IsDateString({}, { message: 'La fecha de nacimiento debe ser una fecha válida (YYYY-MM-DD)' })
+  @IsDateString(
+    {},
+    {
+      message: 'La fecha de nacimiento debe ser una fecha válida (YYYY-MM-DD)',
+    },
+  )
   fecha_nacimiento!: string;
 
   @IsString()
