@@ -4,6 +4,7 @@ import {
   Delete,
   Patch,
   Body,
+  Param,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -17,30 +18,32 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @Roles('admin', 'moderador')
   @Get('todos')
-  async verTodosLosUsuarios() {
-    return this.usersService.obtenerTodosLosUsuarios();
+  async verUsuarios(@Request() req) {
+    return this.usersService.obtenerUsuariosSegunRol(req.user.rol);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @Roles('admin')
+  @Get(':uuid')
+  async verUsuarioPorUuid(@Param('uuid') uuid: string) {
+    return this.usersService.obtenerDetalleUsuario(uuid);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get()
   async getPerfil(@Request() req) {
-    return this.usersService.findById(req.user.sub);
+    return this.usersService.findByUuid(req.user.sub);
   }
 
-  // 2. DERECHO DE RECTIFICACIÓN (Actualizar perfil)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @UseGuards(JwtAuthGuard)
   @Patch('actualizar')
   async actualizarCuenta(@Request() req, @Body() body: any) {
     return this.usersService.actualizarCuenta(req.user.sub, body);
   }
 
-  // 3. DERECHO DE CANCELACIÓN Y OPOSICIÓN (Anonimizar)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('anfitrion')
+  @UseGuards(JwtAuthGuard)
   @Delete('cancelar')
   async cancelarCuenta(@Request() req) {
     return this.usersService.anonimizarCuenta(req.user.sub);

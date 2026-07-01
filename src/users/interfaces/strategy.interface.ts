@@ -1,44 +1,50 @@
+import { Repository } from 'typeorm';
+import { Usuario } from '../entities/usuario.entity';
 import * as bcrypt from 'bcrypt';
 
-// Interfaz base obligatoria
 export interface ArcoStrategy {
-  ejecutar(usuarioIndex: number, DB: any[], datos?: any): any;
+  ejecutar(
+    usuario: Usuario,
+    repo: Repository<Usuario>,
+    datos?: any,
+  ): Promise<any>;
 }
 
-// Estrategia encargada del Derecho de Rectificación
 export class RectificacionStrategy implements ArcoStrategy {
-  async ejecutar(usuarioIndex: number, DB: any[], datosNuevos: any) {
-    if (datosNuevos.nombre) {
-      DB[usuarioIndex].nombre = datosNuevos.nombre;
-    }
+  async ejecutar(
+    usuario: Usuario,
+    repo: Repository<Usuario>,
+    datosNuevos: any,
+  ) {
+    if (datosNuevos.nombres) usuario.nombres = datosNuevos.nombres;
+    if (datosNuevos.apellidos) usuario.apellidos = datosNuevos.apellidos;
 
     if (datosNuevos.password) {
-      DB[usuarioIndex].password = await bcrypt.hash(datosNuevos.password, 10);
+      usuario.password_hash = await bcrypt.hash(datosNuevos.password, 10);
     }
 
-    const { password, ...usuarioActualizado } = DB[usuarioIndex];
+    const actualizado = await repo.save(usuario);
+    const { password_hash, ...resto } = actualizado;
 
     return {
-      message:
-        'Cuenta (Rectificación) actualizada exitosamente mediante Strategy',
-      user: usuarioActualizado,
+      message: 'Cuenta rectificada en PostgreSQL mediante Strategy',
+      user: resto,
     };
   }
 }
 
-// Estrategia encargada del Derecho de Cancelación
 export class CancelacionStrategy implements ArcoStrategy {
-  async ejecutar(usuarioIndex: number, DB: any[]) {
-    const id = DB[usuarioIndex].id;
+  async ejecutar(usuario: Usuario, repo: Repository<Usuario>) {
+    usuario.nombres = 'Usuario';
+    usuario.apellidos = 'Anonimizado';
+    usuario.correo = `eliminado_${usuario.id}@fiestaplan.local`;
+    usuario.password_hash = 'ELIMINADO';
+    usuario.activo = false;
 
-    DB[usuarioIndex].nombre = 'Usuario Anonimizado';
-    DB[usuarioIndex].email = `eliminado_${id}@fiestaplan.local`;
-    DB[usuarioIndex].password = 'ELIMINADO';
-    DB[usuarioIndex].fecha_eliminacion = new Date();
+    await repo.save(usuario);
 
     return {
-      message:
-        'Cuenta cancelada y anonimizada según la LGPDPPSO mediante Strategy',
+      message: 'Cuenta cancelada y anonimizada en PostgreSQL según LGPDPPSO',
     };
   }
 }

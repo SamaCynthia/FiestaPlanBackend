@@ -1,48 +1,85 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ArcoStrategy, RectificacionStrategy, CancelacionStrategy } from './interfaces/strategy.interface';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Usuario } from './entities/usuario.entity';
+import {
+  ArcoStrategy,
+  RectificacionStrategy,
+  CancelacionStrategy,
+} from './interfaces/strategy.interface';
 
 @Injectable()
 export class UsersService {
-  private DB: any[] = [];
+  constructor(
+    @InjectRepository(Usuario)
+    private usuarioRepository: Repository<Usuario>,
+  ) {}
 
-  async obtenerTodosLosUsuarios() {
-    return this.DB;
+  async findByEmail(correo: string): Promise<Usuario | null> {
+    return await this.usuarioRepository.findOne({ where: { correo } });
   }
 
-  async findByEmail(email: string) {
-    return this.DB.find((user) => user.email === email);
-  }
-
-  async findById(id: number) {
-    const user = this.DB.find((user) => user.id === id);
+  async findById(id: number): Promise<Usuario> {
+    const user = await this.usuarioRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return user;
   }
 
-  async create(user: any) {
-    const newUser = { id: Date.now(), ...user, rol: 'anfitrion' };
-    this.DB.push(newUser);
-    return newUser;
+  async findByUuid(uuid: string): Promise<Usuario> {
+    const user = await this.usuarioRepository.findOne({ where: { uuid } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return user;
   }
 
-  // Lógica ARCO: Cancelación / Anonimización delegada a Strategy
-  async anonimizarCuenta(id: number) {
-    const estrategia = new CancelacionStrategy();
-    return this.procesarArco(estrategia, id);
-  }
+  async create(userData: Partial<Usuario>): Promise<Usuario> {
+  const newUser = this.usuarioRepository.create(userData);
+  const saved = await this.usuarioRepository.save(newUser);
 
-  // Lógica ARCO: Rectificación delegada a Strategy
-  async actualizarCuenta(id: number, datosNuevos: any) {
+  return await this.usuarioRepository.findOneOrFail({ where: { id: saved.id } });
+}
+
+  async actualizarCuenta(uuid: string, datosNuevos: any) {
     const estrategia = new RectificacionStrategy();
-    return this.procesarArco(estrategia, id, datosNuevos);
+    return this.procesarArco(estrategia, uuid, datosNuevos);
   }
 
-  // Procesador central del patrón Contexto
-  private async procesarArco(strategy: ArcoStrategy, id: number, datos?: any) {
-    const userIndex = this.DB.findIndex((u) => u.id === id);
-    if (userIndex === -1) throw new NotFoundException('Usuario no encontrado');
-    
-    // Ejecutamos y esperamos la estrategia de manera asíncrona
-    return await strategy.ejecutar(userIndex, this.DB, datos);
+  async anonimizarCuenta(uuid: string) {
+    const estrategia = new CancelacionStrategy();
+    return this.procesarArco(estrategia, uuid);
+  }
+
+  private async procesarArco(strategy: ArcoStrategy, uuid: string, datos?: any) {
+    const usuario = await this.findByUuid(uuid);
+    return await strategy.ejecutar(usuario, this.usuarioRepository, datos);
+  }
+
+  async obtenerUsuariosSegunRol(rolSolicitante: string): Promise<any[]> {
+    const usuarios = await this.usuarioRepository.find();
+
+    if (rolSolicitante === 'admin') {
+      return usuarios.map((u) => {
+        const { password_hash, id, ...resto } = u;
+        return resto;
+      });
+    }
+
+    if (rolSolicitante === 'moderador') {
+      return usuarios.map((u) => ({
+        uuid: u.uuid,
+        nombres: u.nombres,
+        apellidos: u.apellidos,
+        correo: u.correo,
+        activo: u.activo,
+        rol: u.rol?.nombre,
+      }));
+    }
+
+    return [];
+  }
+
+  async obtenerDetalleUsuario(uuid: string): Promise<any> {
+    const usuario = await this.findByUuid(uuid);
+    const { password_hash, id, ...resto } = usuario;
+    return resto;
   }
 }
