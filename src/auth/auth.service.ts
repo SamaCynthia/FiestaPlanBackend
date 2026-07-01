@@ -38,10 +38,15 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const usuarioBD = await this.usersService.findByEmail(loginDto.correo);
     if (!usuarioBD || !usuarioBD.activo) {
-      throw new UnauthorizedException('Credenciales inválidas o cuenta inactiva');
+      throw new UnauthorizedException(
+        'Credenciales inválidas o cuenta inactiva',
+      );
     }
 
-    const isMatch = await bcrypt.compare(loginDto.password, usuarioBD.password_hash);
+    const isMatch = await bcrypt.compare(
+      loginDto.password,
+      usuarioBD.password_hash,
+    );
     if (!isMatch) throw new UnauthorizedException('Credenciales inválidas');
 
     const rolAsignado = usuarioBD.rol.nombre;
