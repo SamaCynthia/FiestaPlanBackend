@@ -32,11 +32,13 @@ export class UsersService {
   }
 
   async create(userData: Partial<Usuario>): Promise<Usuario> {
-  const newUser = this.usuarioRepository.create(userData);
-  const saved = await this.usuarioRepository.save(newUser);
+    const newUser = this.usuarioRepository.create(userData);
+    const saved = await this.usuarioRepository.save(newUser);
 
-  return await this.usuarioRepository.findOneOrFail({ where: { id: saved.id } });
-}
+    return await this.usuarioRepository.findOneOrFail({
+      where: { id: saved.id },
+    });
+  }
 
   async actualizarCuenta(uuid: string, datosNuevos: any) {
     const estrategia = new RectificacionStrategy();
@@ -48,7 +50,11 @@ export class UsersService {
     return this.procesarArco(estrategia, uuid);
   }
 
-  private async procesarArco(strategy: ArcoStrategy, uuid: string, datos?: any) {
+  private async procesarArco(
+    strategy: ArcoStrategy,
+    uuid: string,
+    datos?: any,
+  ) {
     const usuario = await this.findByUuid(uuid);
     return await strategy.ejecutar(usuario, this.usuarioRepository, datos);
   }
