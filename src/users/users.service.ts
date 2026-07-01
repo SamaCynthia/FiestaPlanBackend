@@ -15,41 +15,71 @@ export class UsersService {
     private usuarioRepository: Repository<Usuario>,
   ) {}
 
-  async findByEmail(correo: string) {
+  async findByEmail(correo: string): Promise<Usuario | null> {
     return await this.usuarioRepository.findOne({ where: { correo } });
   }
-  // // Obligamos a TypeScript a saber que esto devuelve UN SOLO usuario (o nulo)
-  // async findByEmail(correo: string): Promise<Usuario | null> {
-  //   return await this.usuarioRepository.findOne({ where: { correo } });
-  // }
 
-  async findById(id: number) {
+  async findById(id: number): Promise<Usuario> {
     const user = await this.usuarioRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return user;
   }
 
-  async create(userData: any) {
-    const newUser = this.usuarioRepository.create(userData);
-    return this.usuarioRepository.save(newUser);
+  async findByUuid(uuid: string): Promise<Usuario> {
+    const user = await this.usuarioRepository.findOne({ where: { uuid } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return user;
   }
 
-  async actualizarCuenta(id: number, datosNuevos: any) {
+  async create(userData: Partial<Usuario>): Promise<Usuario> {
+  const newUser = this.usuarioRepository.create(userData);
+  const saved = await this.usuarioRepository.save(newUser);
+
+  return await this.usuarioRepository.findOneOrFail({ where: { id: saved.id } });
+}
+
+  async actualizarCuenta(uuid: string, datosNuevos: any) {
     const estrategia = new RectificacionStrategy();
-    return this.procesarArco(estrategia, id, datosNuevos);
+    return this.procesarArco(estrategia, uuid, datosNuevos);
   }
 
-  async anonimizarCuenta(id: number) {
+  async anonimizarCuenta(uuid: string) {
     const estrategia = new CancelacionStrategy();
-    return this.procesarArco(estrategia, id);
+    return this.procesarArco(estrategia, uuid);
   }
 
-  private async procesarArco(strategy: ArcoStrategy, id: number, datos?: any) {
-    const usuario = await this.findById(id);
+  private async procesarArco(strategy: ArcoStrategy, uuid: string, datos?: any) {
+    const usuario = await this.findByUuid(uuid);
     return await strategy.ejecutar(usuario, this.usuarioRepository, datos);
   }
 
-  async obtenerTodosLosUsuarios() {
-    return await this.usuarioRepository.find();
+  async obtenerUsuariosSegunRol(rolSolicitante: string): Promise<any[]> {
+    const usuarios = await this.usuarioRepository.find();
+
+    if (rolSolicitante === 'admin') {
+      return usuarios.map((u) => {
+        const { password_hash, id, ...resto } = u;
+        return resto;
+      });
+    }
+
+    if (rolSolicitante === 'moderador') {
+      return usuarios.map((u) => ({
+        uuid: u.uuid,
+        nombres: u.nombres,
+        apellidos: u.apellidos,
+        correo: u.correo,
+        activo: u.activo,
+        rol: u.rol?.nombre,
+      }));
+    }
+
+    return [];
+  }
+
+  async obtenerDetalleUsuario(uuid: string): Promise<any> {
+    const usuario = await this.findByUuid(uuid);
+    const { password_hash, id, ...resto } = usuario;
+    return resto;
   }
 }
