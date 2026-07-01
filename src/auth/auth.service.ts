@@ -48,6 +48,7 @@ export class AuthService {
 
     // El "sub" del token ahora es el UUID, no el id secuencial
     const payload = {
+      id: usuarioBD.id,
       correo: usuarioBD.correo,
       sub: usuarioBD.uuid,
       rol: rolAsignado,
