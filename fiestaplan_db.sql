@@ -88,7 +88,8 @@ CREATE TYPE accion_log_enum AS ENUM (
     'subir_imagen',
     'solicitar_reserva',
     'encuesta_enviada',
-    'intento_login_fallido'
+    'intento_login_fallido',
+    'transferencia_datos'
 );
 
 -- ============================================================
@@ -571,6 +572,30 @@ CREATE INDEX idx_logs_fallos_login     ON logs_auditoria (usuario_correo, creado
     WHERE accion = 'intento_login_fallido';
 
 -- ============================================================
+-- 15B. CONTROL DE PRIVACIDAD Y CONSENTIMIENTOS (RF-06)
+-- ============================================================
+
+CREATE TABLE usuario_consentimientos (
+    id                  BIGSERIAL           PRIMARY KEY,
+    usuario_id          BIGINT              NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    servicio            VARCHAR(100)        NOT NULL,
+    concedido           BOOLEAN             NOT NULL DEFAULT TRUE,
+    consentimiento_fecha TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
+    
+    -- Excepción de Ley documentada (si aplica)
+    excepcion_ley       BOOLEAN             NOT NULL DEFAULT FALSE,
+    excepcion_documentada TEXT,
+
+    created_at          TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT uq_usuario_servicio UNIQUE (usuario_id, servicio)
+);
+
+CREATE INDEX idx_consentimientos_usuario ON usuario_consentimientos (usuario_id);
+CREATE INDEX idx_consentimientos_servicio ON usuario_consentimientos (servicio);
+
+-- ============================================================
 -- 16. NOTIFICACIONES IN-APP (WebSocket + historial)
 -- ============================================================
 
@@ -622,7 +647,8 @@ BEGIN
         'presupuesto_categorias',
         'invitaciones',
         'cola_correos',
-        'solicitudes_reserva'
+        'solicitudes_reserva',
+        'usuario_consentimientos'
     ]
     LOOP
         EXECUTE FORMAT(
@@ -723,3 +749,6 @@ SELECT
 FROM pg_tables
 WHERE schemaname = 'public'
 ORDER BY tablename;
+
+
+-- Modificaciones en la base de datos
