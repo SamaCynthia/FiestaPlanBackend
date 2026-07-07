@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { ApiAdapterModule } from './api-adapter/api-adapter.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
     UsersModule,
     RolesModule,
     AuditLogsModule,
+    ApiAdapterModule,
   ],
   controllers: [AppController],
   providers: [AppService],
