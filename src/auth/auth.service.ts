@@ -27,6 +27,11 @@ export class AuthService {
       correo: registerDto.correo,
       fecha_nacimiento: registerDto.fecha_nacimiento,
       password_hash: passwordHash,
+      ...(registerDto.genero && { genero: registerDto.genero }),
+      ...(registerDto.telefono && { telefono: registerDto.telefono }),
+      ...(registerDto.ciudad_residencia && {
+        ciudad_residencia: registerDto.ciudad_residencia,
+      }),
     });
 
     return {
@@ -51,9 +56,7 @@ export class AuthService {
 
     const rolAsignado = usuarioBD.rol.nombre;
 
-    // El "sub" del token ahora es el UUID, no el id secuencial
     const payload = {
-      id: usuarioBD.id,
       correo: usuarioBD.correo,
       sub: usuarioBD.uuid,
       rol: rolAsignado,

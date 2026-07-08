@@ -21,7 +21,9 @@ export class LifecycleJobService {
    */
   @Cron('0 2 * * *')
   async ejecutarLimpiezaCicloVida(): Promise<void> {
-    this.logger.log('Iniciando proceso automático de ciclo de vida (limpieza y anonimización)...');
+    this.logger.log(
+      'Iniciando proceso automático de ciclo de vida (limpieza y anonimización)...',
+    );
 
     // 1. Anonimizar usuarios inactivos
     let usuariosAnonimizados = 0;
@@ -63,7 +65,7 @@ export class LifecycleJobService {
       );
       eventosEliminados = Array.isArray(resEventos)
         ? resEventos[1]
-        : (resEventos?.rowCount || 0);
+        : resEventos?.rowCount || 0;
     } catch (error) {
       this.logger.error(
         `Error en el paso de eliminación de eventos: ${error instanceof Error ? error.message : String(error)}`,
@@ -78,7 +80,7 @@ export class LifecycleJobService {
       );
       sesionesEliminadas = Array.isArray(resSesiones)
         ? resSesiones[1]
-        : (resSesiones?.rowCount || 0);
+        : resSesiones?.rowCount || 0;
     } catch (error) {
       this.logger.error(
         `Error en el paso de limpieza de sesiones: ${error instanceof Error ? error.message : String(error)}`,

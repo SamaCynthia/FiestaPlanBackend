@@ -1,4 +1,11 @@
-import { IsEmail, IsString, MinLength, IsDateString } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsDateString,
+  IsOptional,
+  IsIn,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsString({ message: 'El nombre debe ser un texto' })
@@ -23,4 +30,18 @@ export class RegisterDto {
     message: 'La contraseña debe tener al menos 8 caracteres para ser segura',
   })
   password!: string;
+
+  @IsOptional()
+  @IsIn(['masculino', 'femenino', 'otro', 'prefiero_no_decir'], {
+    message: 'Género inválido',
+  })
+  genero?: string;
+
+  @IsOptional()
+  @IsString()
+  telefono?: string;
+
+  @IsOptional()
+  @IsString()
+  ciudad_residencia?: string;
 }
