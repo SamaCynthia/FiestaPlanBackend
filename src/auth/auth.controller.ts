@@ -1,4 +1,5 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -16,7 +17,31 @@ export class AuthController {
 
   @Post('login')
   @AuditLog({ accion: 'login', modulo: 'autenticacion' })
-  login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { access_token, rol } = await this.authService.login(loginDto);
+
+    res.cookie('access_token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // true solo en HTTPS real
+      sameSite: 'strict',
+      maxAge: 8 * 60 * 60 * 1000, // 8h, igual que JWT_EXPIRATION
+    });
+
+    // El body ya NO lleva el token, solo el rol (para que la UI reaccione)
+    return { rol };
+  }
+
+  @Post('logout')
+  @AuditLog({ accion: 'logout', modulo: 'autenticacion' })
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('access_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+    return { message: 'Sesión cerrada correctamente' };
   }
 }
