@@ -27,7 +27,11 @@ export class UsuarioConsentimiento {
   @Column({ type: 'boolean', default: true })
   concedido!: boolean;
 
-  @Column({ name: 'consentimiento_fecha', type: 'timestamp with time zone', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'consentimiento_fecha',
+    type: 'timestamp with time zone',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   consentimientoFecha!: Date;
 
   @Column({ name: 'excepcion_ley', type: 'boolean', default: false })

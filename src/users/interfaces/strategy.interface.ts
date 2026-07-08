@@ -40,6 +40,14 @@ export class CancelacionStrategy implements ArcoStrategy {
     usuario.correo = `eliminado_${usuario.id}@fiestaplan.local`;
     usuario.password_hash = 'ELIMINADO';
     usuario.activo = false;
+    usuario.telefono = undefined;
+    usuario.ciudad_residencia = undefined;
+    usuario.fecha_nacimiento = '1970-01-01';
+    usuario.genero = 'prefiero_no_decir';
+    usuario.foto_perfil_data = null;
+    usuario.foto_perfil_url = undefined;
+    usuario.foto_perfil_mime = undefined;
+    usuario.token_verificacion = undefined;
 
     await repo.save(usuario);
 

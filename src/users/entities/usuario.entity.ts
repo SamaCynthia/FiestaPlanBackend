@@ -47,6 +47,18 @@ export class Usuario {
   @Column({ default: false })
   correo_verificado!: boolean;
 
+  @Column({ name: 'token_verificacion', nullable: true })
+  token_verificacion?: string;
+
+  @Column({ name: 'foto_perfil_data', type: 'bytea', nullable: true })
+  foto_perfil_data?: any;
+
+  @Column({ name: 'foto_perfil_url', nullable: true })
+  foto_perfil_url?: string;
+
+  @Column({ name: 'foto_perfil_mime', nullable: true })
+  foto_perfil_mime?: string;
+
   // Relación dinámica con la tabla roles (rol de sistema: admin, moderador, usuario)
   @Column({ name: 'rol_id', default: 3 })
   rol_id!: number;
