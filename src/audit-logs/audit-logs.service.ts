@@ -14,4 +14,17 @@ export class AuditLogsService {
     const log = this.logRepository.create(logData);
     return await this.logRepository.save(log);
   }
+
+  async obtenerLogsPorUsuario(usuarioId: number): Promise<LogAuditoria[]> {
+    return await this.logRepository.find({
+      where: { usuarioId },
+      order: { creadoEn: 'DESC' },
+    });
+  }
+
+  async obtenerTodosLosLogs(): Promise<LogAuditoria[]> {
+    return await this.logRepository.find({
+      order: { creadoEn: 'DESC' },
+    });
+  }
 }

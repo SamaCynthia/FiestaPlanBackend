@@ -12,14 +12,17 @@ import {
   AuditLogOptions,
 } from '../decorators/audit-log.decorator';
 import { AuditLogsService } from '../audit-logs.service';
-import { UsersService } from '../../users/users.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Usuario } from '../../users/entities/usuario.entity';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
   constructor(
     private readonly reflector: Reflector,
     private readonly auditLogsService: AuditLogsService,
-    private readonly usersService: UsersService,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -119,8 +122,8 @@ export class AuditLogInterceptor implements NestInterceptor {
     if (accion === 'login' || accion === 'intento_login_fallido') {
       const email = req.body?.correo;
       if (email) {
-        const user = await this.usersService
-          .findByEmail(email)
+        const user = await this.usuarioRepository
+          .findOne({ where: { correo: email } })
           .catch(() => null);
         if (user) {
           usuarioId = user.id;
@@ -131,8 +134,8 @@ export class AuditLogInterceptor implements NestInterceptor {
     else if (accion === 'registro' && exitoso) {
       const email = req.body?.correo;
       if (email) {
-        const user = await this.usersService
-          .findByEmail(email)
+        const user = await this.usuarioRepository
+          .findOne({ where: { correo: email } })
           .catch(() => null);
         if (user) {
           usuarioId = user.id;
@@ -144,8 +147,8 @@ export class AuditLogInterceptor implements NestInterceptor {
     // 4. Determinar el ID del recurso afectado (entidad_id)
     if (entidadTipo === 'usuario') {
       if (req.params?.uuid) {
-        const targetUser = await this.usersService
-          .findByUuid(req.params.uuid)
+        const targetUser = await this.usuarioRepository
+          .findOne({ where: { uuid: req.params.uuid } })
           .catch(() => null);
         if (targetUser) {
           entidadId = targetUser.id;

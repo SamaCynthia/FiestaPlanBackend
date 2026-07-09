@@ -57,6 +57,7 @@ export class AuthService {
     const rolAsignado = usuarioBD.rol.nombre;
 
     const payload = {
+      id: usuarioBD.id,
       correo: usuarioBD.correo,
       sub: usuarioBD.uuid,
       rol: rolAsignado,
