@@ -39,7 +39,7 @@ export class RectificacionStrategy implements ArcoStrategy {
     }
 
     const actualizado = await repo.save(usuario);
-    const { password_hash, ...resto } = actualizado;
+    const { password_hash, id, ...resto } = actualizado;
 
     return {
       message: 'Cuenta rectificada en PostgreSQL mediante Strategy',
