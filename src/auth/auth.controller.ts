@@ -25,7 +25,7 @@ export class AuthController {
 
     res.cookie('access_token', access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // true solo en HTTPS real
+      secure: true,
       sameSite: 'strict',
       maxAge: 8 * 60 * 60 * 1000, // 8h, igual que JWT_EXPIRATION
     });
@@ -39,7 +39,7 @@ export class AuthController {
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('access_token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'strict',
     });
     return { message: 'Sesión cerrada correctamente' };

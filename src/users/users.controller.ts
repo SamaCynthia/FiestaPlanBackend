@@ -63,7 +63,9 @@ export class UsersController {
     entidadTipo: 'usuario',
   })
   async getPerfil(@Request() req) {
-    return this.usersService.findByUuid(req.user.sub);
+    const usuario = await this.usersService.findByUuid(req.user.sub);
+    const { password_hash, id, ...resto } = usuario;
+    return resto;
   }
 
   @UseGuards(JwtAuthGuard)
