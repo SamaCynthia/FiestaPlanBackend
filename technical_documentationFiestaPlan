@@ -1,0 +1,691 @@
+# Especificación Técnica del Backend: FiestaPlan
+
+Este documento sirve como referencia completa del backend para el desarrollo del frontend de la aplicación **FiestaPlan**. Proporciona una guía detallada sobre la arquitectura del sistema, estructura de datos, especificaciones de la API, autenticación, autorización, validaciones, flujos de negocio y una sección optimizada para alimentar el contexto de otra IA.
+
+---
+
+## 1. Resumen General
+
+### Propósito del Backend
+El backend de **FiestaPlan** es un sistema de gestión y planificación de eventos sociales (cumpleaños, bodas, despedidas, etc.) que permite coordinar participantes, tareas, presupuestos, reservaciones de salones, envío de invitaciones y análisis de encuestas post-evento. Cuenta con mecanismos robustos de auditoría de seguridad y un adaptador seguro para interactuar con servicios externos (por ejemplo, pasarelas de pago o APIs de terceros) mediante canales cifrados y autenticación mutua (mTLS) garantizando la privacidad de los datos personales en cumplimiento con legislaciones de privacidad (LGPDPPSO).
+
+### Tecnologías Utilizadas
+*   **Framework Principal:** NestJS v11 (Node.js) con TypeScript.
+*   **Base de Datos:** PostgreSQL 15+ con extensiones `pgcrypto` y `postgis` (búsquedas geoespaciales).
+*   **OR/M:** TypeORM para persistencia y gestión del esquema.
+*   **Seguridad:** JSON Web Tokens (JWT) mediante `@nestjs/jwt`, `bcrypt` para hashing de contraseñas, y `cookie-parser` para cookies seguras.
+*   **Validación:** `class-validator` y `class-transformer` para validación de datos a nivel de DTO.
+*   **Monitoreo y Tareas:** `@nestjs/schedule` para tareas automáticas cronometradas.
+
+### Arquitectura del Proyecto
+El backend sigue el patrón modular estándar de NestJS, estructurado en capas limpias:
+1.  **Capa de Controladores (`Controllers`):** Expone las rutas de la API, maneja las solicitudes HTTP, aplica interceptores de auditoría y guards de autenticación/roles.
+2.  **Capa de Servicios o Lógica de Negocio (`Services`):** Contiene la lógica operativa y la implementación de patrones de diseño (como *Strategy* para derechos ARCO y *Adapter* para integraciones seguras).
+3.  **Capa de Datos (Entities y Repositories):** Entidades de TypeORM mapeadas a la base de datos PostgreSQL.
+4.  **Capa de Seguridad (Guards y Decorators):** Valida los tokens de acceso y los permisos de usuario (RBAC).
+
+### Estructura de Carpetas en `src`
+```text
+src/
+├── api-adapter/          # Módulo adaptador seguro para peticiones externas con consentimiento
+│   ├── dto/              # DTOs para consentimiento de datos
+│   ├── entities/         # Entidad de consentimiento del usuario
+│   ├── api-adapter.controller.ts
+│   ├── api-adapter.module.ts
+│   └── api-adapter.service.ts
+├── audit-logs/           # Interceptor global para registrar logs de auditoría sin datos PII
+│   ├── decorators/       # Decorador @AuditLog para marcar rutas auditables
+│   ├── entities/         # Entidad LogAuditoria mapeada a logs_auditoria
+│   ├── interceptors/     # Interceptor global que procesa solicitudes exitosas y fallidas
+│   ├── audit-logs.module.ts
+│   └── audit-logs.service.ts
+├── auth/                 # Registro, Login, Logout, Guards de seguridad y JWT
+│   ├── decorators/       # Decorador @Roles para RBAC
+│   ├── dto/              # DTOs de login y registro
+│   ├── guards/           # JwtAuthGuard y RolesGuard
+│   ├── shared/           # Módulo compartido de configuración JWT
+│   ├── auth.controller.ts
+│   ├── auth.module.ts
+│   └── auth.service.ts
+├── lifecycle/            # Tarea programada diaria para depuración de datos (Ciclo de Vida)
+│   ├── lifecycle-job.service.ts
+│   └── lifecycle.module.ts
+├── roles/                # Definición de Roles del sistema
+│   ├── entities/         # Entidad Rol (Administrador, Moderador, Usuario)
+│   └── roles.module.ts
+├── users/                # Gestión de perfiles de usuario y derechos ARCO (Strategy)
+│   ├── entities/         # Entidad Usuario
+│   ├── interfaces/       # Estrategias (RectificacionStrategy y CancelacionStrategy)
+│   ├── users.controller.ts
+│   ├── users.module.ts
+│   └── users.service.ts
+├── app.controller.ts     # Controlador base
+├── app.module.ts         # Módulo raíz (configura TypeORM, Schedule, etc.)
+├── app.service.ts        # Servicio base
+└── main.ts               # Punto de entrada de la aplicación (CORS, validaciones, cookie-parser)
+```
+
+---
+
+## 2. Módulos Existentes (Código Activo)
+
+### `Auth` (Autenticación)
+*   **Propósito:** Gestionar el acceso seguro a la plataforma.
+*   **Problema que resuelve:** Permite el registro de nuevos usuarios con contraseñas encriptadas, valida las credenciales durante el inicio de sesión y asegura las sesiones mediante cookies y tokens JWT.
+*   **Interacciones:** Depende de `UsersModule` para buscar y guardar usuarios, e interactúa con `AuditLogsModule` para registrar los intentos de login, registros y logouts.
+
+### `Users` (Perfiles y Derechos ARCO)
+*   **Propósito:** Administrar la información de los usuarios del sistema y garantizar la protección de datos personales.
+*   **Problema que resuelve:** Permite a los usuarios actualizar su información y cancelar su cuenta de acuerdo con las normativas LGPDPPSO (derechos ARCO). Emplea el patrón *Strategy* para rectificar o anonimizar los datos. Permite a administradores y moderadores listar los perfiles existentes con diferentes niveles de visibilidad de datos. Ahora además expone los logs de auditoría personales y globales.
+*   **Interacciones:** Depende de `RolesModule` para asociar roles y es consumido por `AuthModule`.
+
+### `Roles` (Control de Acceso)
+*   **Propósito:** Definir los roles del sistema.
+*   **Problema que resuelve:** Mapea la tabla `roles` en la base de datos PostgreSQL, la cual clasifica a los usuarios (1: Admin, 2: Moderador, 3: Usuario).
+*   **Interacciones:** Es importado por `UsersModule` y utilizado dinámicamente por el `RolesGuard` en `AuthModule`.
+
+### `Audit Logs` (Auditoría de Actividad)
+*   **Propósito:** Mantener un historial completo y no modificable de las operaciones sensibles.
+*   **Problema que resuelve:** Registra automáticamente quién, cuándo, desde qué IP/User-Agent y qué acción realizó en el sistema. Sanitiza los mensajes de error para no exponer información personal o tokens sensibles de red.
+*   **Interacciones:** Se ejecuta de forma transversal en toda la aplicación mediante un interceptor global (`AuditLogInterceptor`). Se apoya en `UsersService` para buscar información del usuario basada en sus credenciales o UUID.
+
+### `Api Adapter` (Integración Segura y Consentimiento)
+*   **Propósito:** Actuar como un túnel cifrado hacia APIs de terceros.
+*   **Problema que resuelve:** Garantiza la seguridad y privacidad en la transferencia de datos personales hacia el exterior. Requiere que el usuario otorgue consentimiento explícito para transferir información a un servicio específico, o documentar una excepción de ley válida. Inyecta dinámicamente tokens de autorización o certificados TLS mutuos (mTLS) desde variables del entorno para evitar exponer credenciales.
+*   **Interacciones:** Interactúa con `AuditLogsModule` para registrar auditorías de transferencias y con el esquema de usuarios.
+
+### `Lifecycle` (Ciclo de Vida de los Datos)
+*   **Propósito:** Tareas automáticas de mantenimiento de la privacidad y limpieza de base de datos.
+*   **Problema que resuelve:** Ejecuta un Job diario (`@Cron`) que anonimiza cuentas inactivas (antigüedad mayor a 30 días de inactividad), elimina eventos antiguos (más de 365 días de antigüedad en cascada) y borra registros de sesiones expiradas en PostgreSQL.
+*   **Interacciones:** Utiliza la base de datos compartida y el repositorio de usuarios aplicando la estrategia de cancelación.
+
+---
+
+## 3. Modelos o Entidades
+
+El backend combina entidades mapeadas por TypeORM en el código con un diseño de esquema relacional completo definido en SQL (`fiestaplan_db.sql`).
+
+### A. Entidades en NestJS (Código de la Aplicación)
+
+#### `Rol` (tabla `roles`)
+*   **Descripción:** Representa el perfil del usuario en el sistema.
+*   **Campos:**
+    *   `id`: `number` (Primary Key, incremental)
+    *   `nombre`: `string` (max. 50 caracteres, único, no nulo. Ej: `'admin'`, `'moderador'`, `'usuario'`)
+    *   `descripcion`: `string` (text, nullable)
+    *   `created_at`: `Date` (Timestamp, automático al crear)
+
+#### `Usuario` (tabla `usuarios`)
+*   **Descripción:** Representa una cuenta de usuario registrado.
+*   **Campos:**
+    *   `id`: `number` (Primary Key, bigint, incremental)
+    *   `uuid`: `string` (UUID auto-generado, único, no nulo)
+    *   `nombres`: `string` (max. 100 caracteres, no nulo)
+    *   `apellidos`: `string` (max. 100 caracteres, no nulo)
+    *   `fecha_nacimiento`: `string` (DATE, formato `YYYY-MM-DD`, no nulo)
+    *   `genero`: `string` (Enum o texto, por defecto `'prefiero_no_decir'`)
+    *   `correo`: `string` (Único, no nulo)
+    *   `telefono`: `string` (Nullable)
+    *   `ciudad_residencia`: `string` (Nullable)
+    *   `password_hash`: `string` (Hash de la contraseña cifrada, no nulo)
+    *   `activo`: `boolean` (Por defecto `true`)
+    *   `correo_verificado`: `boolean` (Por defecto `false`)
+    *   `token_verificacion`: `string` (Nullable, token para verificar el correo)
+    *   `foto_perfil_data`: `bytea` (Binary, nullable. Imagen en formato binario para almacenamiento local)
+    *   `foto_perfil_url`: `string` (Nullable. URL pública de la imagen de perfil)
+    *   `foto_perfil_mime`: `string` (Nullable. Ej: `'image/png'`)
+    *   `rol_id`: `number` (Clave foránea hacia `roles`, por defecto `3` [usuario])
+    *   `rol`: `Rol` (Relación ManyToOne eager con la entidad `Rol`)
+    *   `created_at`: `Date` (Automático al crear)
+    *   `updated_at`: `Date` (Automático al actualizar)
+
+#### `LogAuditoria` (tabla `logs_auditoria`)
+*   **Descripción:** Registra las operaciones críticas realizadas en la aplicación.
+*   **Campos:**
+    *   `id`: `number` (Primary Key, bigint, incremental)
+    *   `usuarioId`: `number` (Clave foránea hacia `usuarios.id`, nullable)
+    *   `accion`: `string` (max. 100, acción realizada. Ej: `'login'`, `'registro'`, `'transferencia_datos'`)
+    *   `descripcion`: `string` (Texto detallado de la acción)
+    *   `modulo`: `string` (max. 100. Módulo del sistema involucrado. Ej: `'autenticacion'`, `'usuarios'`)
+    *   `entidadTipo`: `string` (max. 100. Tipo del recurso afectado. Ej: `'usuario'`, `'transferencia_externa'`, nullable)
+    *   `entidadId`: `number` (bigint. ID del recurso afectado, nullable)
+    *   `ipOrigen`: `string` (Dirección IP de origen, nullable)
+    *   `userAgent`: `string` (Navegador/cliente utilizado, nullable)
+    *   `metodoHttp`: `string` (max. 10. GET, POST, PATCH, etc., nullable)
+    *   `endpoint`: `string` (max. 500, endpoint consumido, nullable)
+    *   `codigoRespuesta`: `number` (smallint, código HTTP de retorno. Ej: 200, 201, 401)
+    *   `exitoso`: `boolean` (Indica si la petición finalizó sin error)
+    *   `mensajeError`: `string` (Mensaje de error sanitizado si falló, nullable)
+    *   `creadoEn`: `Date` (Timestamp con zona horaria, automático)
+
+#### `UsuarioConsentimiento` (tabla `usuario_consentimientos`)
+*   **Descripción:** Registra la autorización explícita que otorga un usuario para que sus datos personales se transmitan a un servicio externo de terceros.
+*   **Campos:**
+    *   `id`: `number` (Primary Key, bigint, incremental)
+    *   `usuarioId`: `number` (Clave foránea hacia `usuarios.id`, no nulo)
+    *   `usuario`: `Usuario` (ManyToOne, onDelete: 'CASCADE')
+    *   `servicio`: `string` (max. 100, identificador del servicio. Ej: `'PAGOS_STRIPE'`)
+    *   `concedido`: `boolean` (Por defecto `true`)
+    *   `consentimientoFecha`: `Date` (Fecha en que se otorgó, por defecto `CURRENT_TIMESTAMP`)
+    *   `excepcionLey`: `boolean` (Indica si aplica una excepción legal de protección de datos, por defecto `false`)
+    *   `excepcionDocumentada`: `string` (Texto descriptivo del fundamento legal si `excepcionLey` es `true`, nullable)
+    *   `createdAt`: `Date` (Timestamp con zona horaria)
+    *   `updatedAt`: `Date` (Timestamp con zona horaria)
+*   **Restricción de unicidad:** Un usuario solo puede tener un registro por cada servicio (`UNIQUE(usuario_id, servicio)`).
+
+---
+
+### B. Entidades del Esquema Base de Datos (Estructuras SQL)
+
+El archivo `fiestaplan_db.sql` define tablas adicionales preparadas para el negocio de planeación de eventos:
+
+#### `Eventos` (`eventos`)
+*   **Propósito:** Proyectos de planificación de eventos.
+*   **Campos clave:**
+    *   `id` (`bigint` pk)
+    *   `uuid` (`uuid` único)
+    *   `nombre` (`varchar(200)` no nulo)
+    *   `tipo` (`tipo_evento_enum`: cumpleanos, despedida, boda, graduacion, aniversario, corporativo, infantil, otro)
+    *   `fecha_evento` (`date` no nulo)
+    *   `hora_inicio`, `hora_fin` (`time`)
+    *   `lugar_nombre` (`varchar(200)`), `lugar_direccion` (`text`), `lugar_ciudad` (`varchar(100)`)
+    *   `lugar_coordenadas` (`geography(point, 4326)`) para mapas
+    *   `num_invitados_est` (`integer`), `presupuesto_limite` (`numeric(12,2)`)
+    *   `lugar_cerrado` (`boolean` por defecto true)
+    *   `estado` (`estado_evento_enum`: borrador, activo, finalizado, cancelado)
+    *   `portada_data` (`bytea`), `portada_url` (`text`), `portada_mime` (`varchar(50)`)
+    *   `anfitrion_id` (`bigint` -> fk `usuarios.id` con borrado en cascada)
+
+#### `Evento Participantes` (`evento_participantes`)
+*   **Propósito:** Listado de invitados y colaboradores de un evento.
+*   **Campos clave:**
+    *   `id` (`bigint` pk)
+    *   `evento_id` (`bigint` fk `eventos.id`)
+    *   `usuario_id` (`bigint` fk `usuarios.id`, nullable si el invitado no está registrado en el sistema)
+    *   `nombre_contacto`, `correo_contacto`, `telefono_contacto` (`varchar`)
+    *   `rol` (`rol_evento_enum`: anfitrion, colaborador, invitado)
+    *   `estado_rsvp` (`estado_rsvp_enum`: pendiente, confirmado, rechazado)
+    *   `token_rsvp` (`varchar` único, para responder el RSVP sin loguearse)
+    *   `rsvp_respondido_en` (`timestamptz`)
+*   **Restricción:** El correo de contacto debe ser único por cada evento (`UNIQUE(evento_id, correo_contacto)`).
+
+#### `Tareas` (`tareas`)
+*   **Propósito:** Actividades o checklist asignadas a participantes.
+*   **Campos clave:**
+    *   `id` (`bigint` pk)
+    *   `uuid` (`uuid` único)
+    *   `evento_id` (`bigint` fk `eventos.id`)
+    *   `asignado_a_id` (`bigint` fk `evento_participantes.id`)
+    *   `titulo` (`varchar(300)` no nulo), `descripcion` (`text`)
+    *   `prioridad` (`prioridad_enum`: baja, media, alta)
+    *   `estado` (`estado_tarea_enum`: pendiente, en_progreso, completada, cancelada)
+    *   `fecha_limite` (`date`)
+    *   `es_sugerida_ia` (`boolean` default false)
+    *   `evidencia_data` (`bytea`), `evidencia_url` (`text`), `evidencia_mime` (`varchar(50)`)
+
+#### `Salones` (`salones`)
+*   **Propósito:** Lugares disponibles para ser reservados para eventos.
+*   **Campos clave:**
+    *   `id` (`bigint` pk), `uuid` (`uuid` único)
+    *   `nombre` (`varchar`), `descripcion` (`text`), `direccion` (`text`), `ciudad` (`varchar`), `coordenadas` (`geography`)
+    *   `capacidad_min`, `capacidad_max` (`integer`)
+    *   `precio_por_hora`, `precio_evento` (`numeric`)
+    *   `incluye_catering`, `incluye_decoracion`, `incluye_audio`, `incluye_iluminacion`, `estacionamiento`, `acceso_discapacidad` (`boolean`)
+    *   `contacto_nombre`, `contacto_correo`, `contacto_telefono` (`varchar`)
+    *   `activo` (`boolean` default true)
+
+#### `Solicitudes Reserva` (`solicitudes_reserva`)
+*   **Propósito:** Solicitudes enviadas por anfitriones para reservar un salón.
+*   **Campos clave:**
+    *   `id` (`bigint` pk), `uuid` (`uuid` único)
+    *   `evento_id` (`bigint` fk `eventos.id`), `salon_id` (`bigint` fk `salones.id`)
+    *   `solicitante_id` (`bigint` fk `usuarios.id`)
+    *   `mensaje` (`text`), `estado` (`varchar` default `'enviada'`), `correo_enviado` (`boolean` default false)
+
+#### Otras tablas auxiliares en base de datos:
+*   `salon_imagenes`: Imágenes asociadas a salones (relación 1:N).
+*   `presupuesto_categorias`: Montos reales vs estimados de gastos categorizados por evento.
+*   `recomendaciones_ia`: Respuestas JSON guardadas de recomendaciones automáticas de IA.
+*   `invitaciones`: Registro de invitaciones enviadas y fallos de envío.
+*   `cola_correos`: Cola de correos electrónicos pendientes por enviar.
+*   `encuestas_post_evento`: Puntuaciones de satisfacción (1 al 5) y sugerencias de eventos finalizados.
+*   `album_evento`: Fotos compartidas de los eventos por los participantes.
+*   `notificaciones`: Notificaciones en tiempo real o en bandeja para usuarios.
+*   `checklist_plantillas`: Tareas predefinidas precargadas para bodas, cumpleaños y despedidas.
+
+---
+
+## 4. API Completa (Especificaciones de los Endpoints)
+
+Todos los endpoints expuestos se detallan a continuación. La URL base por defecto en desarrollo local es `http://localhost:3000`.
+
+### Módulo: Autenticación (`/auth`)
+
+#### 1. Registro de Usuario
+*   **Método:** `POST`
+*   **Ruta:** `/auth/registro`
+*   **Descripción:** Registra un nuevo usuario con rol de cliente básico (id de rol 3 por defecto).
+*   **Autenticación:** No requerida.
+*   **Headers:** `Content-Type: application/json`
+*   **Body esperado:**
+    ```json
+    {
+      "nombres": "Ana María",
+      "apellidos": "Pérez Gómez",
+      "correo": "ana.perez@example.com",
+      "fecha_nacimiento": "1994-08-15",
+      "password": "Password123*",
+      "genero": "femenino",
+      "telefono": "+525512345678",
+      "ciudad_residencia": "Ciudad de México"
+    }
+    ```
+*   **Respuestas posibles:**
+    *   `201 Created`: Registro exitoso.
+        ```json
+        {
+          "message": "Usuario registrado con éxito",
+          "rol": "usuario"
+        }
+        ```
+    *   `400 Bad Request`: Datos de entrada inválidos.
+    *   `401 Unauthorized`: El correo ya está registrado.
+        ```json
+        {
+          "message": "Ya existe una cuenta con ese correo",
+          "error": "Unauthorized",
+          "statusCode": 401
+        }
+        ```
+
+#### 2. Inicio de Sesión (Login)
+*   **Método:** `POST`
+*   **Ruta:** `/auth/login`
+*   **Descripción:** Valida credenciales, genera un token JWT firmado (que incluye el `id` interno del usuario, `correo`, `sub` como UUID y `rol`) y lo almacena en una cookie HTTP-Only segura. Retorna el rol del usuario.
+*   **Autenticación:** No requerida.
+*   **Headers:** `Content-Type: application/json`
+*   **Body esperado:**
+    ```json
+    {
+      "correo": "ana.perez@example.com",
+      "password": "Password123*"
+    }
+    ```
+*   **Respuestas posibles:**
+    *   `200 OK`: Inicio de sesión exitoso.
+        *   **Set-Cookie:** `access_token=eyJhbGciOi...; Max-Age=28800; Path=/; HttpOnly; SameSite=Strict`
+        *   **Body de retorno:**
+            ```json
+            {
+              "rol": "usuario"
+            }
+            ```
+    *   `400 Bad Request`: Campos mal formados.
+    *   `401 Unauthorized`: Contraseña errónea, cuenta inactiva o correo no registrado.
+        ```json
+        {
+          "message": "Credenciales inválidas",
+          "error": "Unauthorized",
+          "statusCode": 401
+        }
+        ```
+
+#### 3. Cerrar Sesión (Logout)
+*   **Método:** `POST`
+*   **Ruta:** `/auth/logout`
+*   **Descripción:** Elimina la cookie del token JWT en el cliente, finalizando la sesión HTTP.
+*   **Autenticación:** No requerida.
+*   **Respuestas posibles:**
+    *   `200 OK`: Cierre de sesión exitoso.
+        *   **Set-Cookie:** `access_token=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict`
+        *   **Body de retorno:**
+            ```json
+            {
+              "message": "Sesión cerrada correctamente"
+            }
+            ```
+
+---
+
+### Módulo: Perfil de Usuario (`/perfil`)
+
+#### 4. Obtener Perfil Propio
+*   **Método:** `GET`
+*   **Ruta:** `/perfil`
+*   **Descripción:** Retorna la información completa del usuario autenticado actualmente basándose en su JWT.
+*   **Autenticación:** Sí (Requiere token JWT).
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Perfil retornado con éxito.
+        ```json
+        {
+          "id": 14,
+          "uuid": "41680194-e400-4b8c-851f-614e5904aa3d",
+          "nombres": "Ana María",
+          "apellidos": "Pérez Gómez",
+          "fecha_nacimiento": "1994-08-15",
+          "genero": "femenino",
+          "correo": "ana.perez@example.com",
+          "telefono": "+525512345678",
+          "ciudad_residencia": "Ciudad de México",
+          "activo": true,
+          "correo_verificado": false,
+          "token_verificacion": null,
+          "foto_perfil_data": null,
+          "foto_perfil_url": null,
+          "foto_perfil_mime": null,
+          "rol_id": 3,
+          "created_at": "2026-07-09T15:45:00.000Z",
+          "updated_at": "2026-07-09T15:45:00.000Z",
+          "rol": {
+            "id": 3,
+            "nombre": "usuario",
+            "descripcion": "Cliente de la plataforma",
+            "created_at": "2026-07-09T12:00:00.000Z"
+          }
+        }
+        ```
+    *   `401 Unauthorized`: Token faltante, inválido o expirado.
+
+#### 5. Consultar Logs de Auditoría Propios (NUEVO)
+*   **Método:** `GET`
+*   **Ruta:** `/perfil/logs`
+*   **Descripción:** Retorna una lista ordenada por fecha descendente de las actividades realizadas por el usuario logueado.
+*   **Autenticación:** Sí (Requiere token JWT).
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Lista de logs de auditoría devueltos.
+        ```json
+        [
+          {
+            "id": "153",
+            "usuarioId": "14",
+            "accion": "editar_perfil",
+            "descripcion": "Actualización de perfil de usuario",
+            "modulo": "usuarios",
+            "entidadTipo": "usuario",
+            "entidadId": "14",
+            "ipOrigen": "127.0.0.1",
+            "userAgent": "Mozilla/5.0...",
+            "metodoHttp": "PATCH",
+            "endpoint": "/perfil/actualizar",
+            "codigoRespuesta": 200,
+            "exitoso": true,
+            "creadoEn": "2026-07-09T15:52:10.000Z"
+          }
+        ]
+        ```
+
+#### 6. Consultar Todos los Logs de Auditoría (Admin) (NUEVO)
+*   **Método:** `GET`
+*   **Ruta:** `/perfil/todos/logs`
+*   **Descripción:** Devuelve el historial completo de logs de auditoría de todos los usuarios registrados en el sistema.
+*   **Autenticación:** Sí.
+*   **Roles Permitidos:** `admin`.
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Lista total de logs en el sistema.
+    *   `403 Forbidden`: Si el usuario no tiene rol de admin.
+
+#### 7. Actualizar Cuenta (Rectificación ARCO)
+*   **Método:** `PATCH`
+*   **Ruta:** `/perfil/actualizar`
+*   **Descripción:** Permite al usuario en sesión rectificar sus nombres, apellidos o actualizar su contraseña.
+*   **Autenticación:** Sí.
+*   **Headers:** `Authorization: Bearer <token>`, `Content-Type: application/json`
+*   **Body esperado:**
+    ```json
+    {
+      "nombres": "Ana María Modificado",
+      "apellidos": "Pérez"
+    }
+    ```
+*   **Respuestas posibles:**
+    *   `200 OK`: Modificación exitosa. Retorna el usuario actualizado (sin hash de contraseña).
+
+#### 8. Cancelar Cuenta (Cancelación ARCO - Anonimización)
+*   **Método:** `DELETE`
+*   **Ruta:** `/perfil/cancelar`
+*   **Descripción:** Cancela la cuenta del usuario en sesión. Para cumplir la ley de datos personales, el sistema anonimiza todos los campos PII (Nombres cambiados a "Usuario Anonimizado", correo a `eliminado_{id}@...`, vacía teléfonos, fotos de perfil, etc.) y desactiva la cuenta (`activo: false`).
+*   **Autenticación:** Sí.
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Cancelación exitosa.
+
+#### 9. Ver Todos los Usuarios (Panel de Control)
+*   **Método:** `GET`
+*   **Ruta:** `/perfil/todos`
+*   **Descripción:** Lista todos los usuarios registrados. Si el solicitante es **admin**, ve todos los campos (excluyendo password_hash). Si el solicitante es **moderador**, ve una vista restringida con campos PII limitados.
+*   **Autenticación:** Sí.
+*   **Roles Permitidos:** `admin`, `moderador`.
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Lista de usuarios mapeada por rol.
+
+#### 10. Ver Detalle de un Usuario por UUID
+*   **Método:** `GET`
+*   **Ruta:** `/perfil/:uuid`
+*   **Descripción:** Devuelve la información completa del perfil de un usuario específico usando su UUID.
+*   **Autenticación:** Sí.
+*   **Roles Permitidos:** `admin`.
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Parámetros de ruta:**
+    *   `uuid` (String de tipo UUID)
+*   **Respuestas posibles:**
+    *   `200 OK`: Objeto de datos de usuario.
+    *   `404 Not Found`: No existe un usuario con ese UUID.
+
+---
+
+### Módulo: Adaptador API Externa (`/api-adapter`)
+
+#### 11. Otorgar o Modificar Consentimiento de Transferencia
+*   **Método:** `POST`
+*   **Ruta:** `/api-adapter/consentimientos`
+*   **Descripción:** Otorga, retira o actualiza el consentimiento expreso del usuario para transferir información personal a una API externa.
+*   **Autenticación:** Sí.
+*   **Headers:** `Authorization: Bearer <token>`, `Content-Type: application/json`
+*   **Body esperado:**
+    ```json
+    {
+      "servicio": "PAGOS_STRIPE",
+      "concedido": true
+    }
+    ```
+*   **Respuestas posibles:**
+    *   `201 Created`: Guardado con éxito.
+
+#### 12. Listar Consentimientos Otorgados
+*   **Método:** `GET`
+*   **Ruta:** `/api-adapter/consentimientos`
+*   **Descripción:** Devuelve la lista completa de servicios y el estado de los consentimientos otorgados por el usuario autenticado.
+*   **Autenticación:** Sí.
+*   **Headers:** `Authorization: Bearer <token>`
+*   **Respuestas posibles:**
+    *   `200 OK`: Listado de consentimientos del usuario.
+
+#### 13. Ejecutar Transferencia de Datos Cifrada (Proxy)
+*   **Método:** `POST`
+*   **Ruta:** `/api-adapter/transferir`
+*   **Descripción:** Actúa como proxy seguro y cifrado. Envía información a una API externa mediante HTTPS y mTLS. Valida previamente si el usuario dio consentimiento explícito para ese servicio o si aplica una excepción de ley documentada.
+*   **Autenticación:** Sí.
+*   **Headers:** `Authorization: Bearer <token>`, `Content-Type: application/json`
+*   **Body esperado:**
+    ```json
+    {
+      "servicio": "TEST_SERVICE",
+      "url": "https://api.testservice.com/v1/data",
+      "method": "POST",
+      "data": {
+        "usuario_email": "ana.perez@example.com",
+        "evento": "Boda Ana"
+      }
+    }
+    ```
+*   **Respuestas posibles:**
+    *   `201 Created`: Petición externa exitosa.
+    *   `400 Bad Request`: Falta de consentimiento o intento HTTP no seguro.
+
+---
+
+## 5. Autenticación
+
+El sistema implementa un flujo híbrido de autenticación combinando **Cookies HTTP-Only** con **Tokens JWT**.
+
+### Funcionamiento Detallado
+
+1.  **Inicio de Sesión:** El frontend envía el correo y contraseña a `/auth/login`.
+2.  **Generación del Token:** El backend verifica las credenciales y firma un JWT con la siguiente estructura (payload):
+    *   `id`: ID incremental del usuario en la base de datos (¡Agregado y corregido para evitar registros nulos en logs y adaptador!).
+    *   `correo`: Correo del usuario.
+    *   `sub`: UUID del usuario (clave pública del perfil).
+    *   `rol`: Rol asignado (`'admin'`, `'moderador'`, `'usuario'`).
+3.  **Entrega del Token (Cookie):** El backend almacena el JWT firmado en la cookie llamada `access_token` enviada con las cabeceras `HttpOnly`, `Secure` (en producción) y `SameSite: Strict`. Adicionalmente, el cuerpo de la respuesta HTTP contiene `{ rol: string }` para que la UI sepa cómo redireccionar.
+4.  **Tiempo de Expiración:** El token tiene una vigencia de **8 horas** (configurada en el `.env` mediante `JWT_EXPIRATION`). La cookie tiene el mismo `maxAge` (8 horas).
+5.  **Protección de Rutas (Guard):** La protección se realiza aplicando el decorador `@UseGuards(JwtAuthGuard)` en las rutas que lo requieran.
+
+> [!WARNING]
+> **Defecto Técnico Crítico en el Backend:**
+> El `JwtAuthGuard` del backend **no extrae el token de las cookies**. Únicamente lo extrae de la cabecera HTTP `Authorization: Bearer <token>`. Dado que la cookie es `HttpOnly`, el JavaScript del frontend no puede leerla para inyectarla en el header `Authorization`.
+> 
+> **Cómo Resolverlo (Ver sección 12 de Recomendaciones).**
+
+---
+
+## 6. Autorización (RBAC)
+
+La autorización se basa en roles (**Role-Based Access Control - RBAC**). El decorador `@Roles(...)` define qué roles tienen permitido el acceso al endpoint, y el interceptor/guard `RolesGuard` se encarga de compararlo contra el campo `rol` embebido en el JWT desencriptado.
+
+### Roles Existentes y Permisos
+
+| Rol | ID en BD | Permisos / Descripción | Endpoints Permitidos |
+| :--- | :---: | :--- | :--- |
+| **admin** | 1 | Control total de la plataforma. Puede ver todos los campos sensibles de los usuarios, perfiles por UUID e historial de logs. | Todos los endpoints de la API (incluidos `/perfil/todos`, `/perfil/:uuid`, y `/perfil/todos/logs`). |
+| **moderador** | 2 | Gestión de contenidos e inspección de usuarios limitada. Acceso a una vista resumida de la lista de usuarios. | Rutas generales, `/perfil`, `/perfil/todos` (vista capada de campos). No puede ver logs de otros ni `/perfil/:uuid`. |
+| **usuario** | 3 | Cliente convencional de la plataforma. Solo puede administrar sus propios datos, ver sus logs de actividad personal y otorgar consentimientos de transferencias externas. | `/auth/logout`, `/perfil` (propio), `/perfil/logs` (propios), `/perfil/actualizar`, `/perfil/cancelar`, `/api-adapter/*`. |
+
+---
+
+## 7. Flujo de Negocio
+
+*   **Registro e Inicio:** El usuario se registra, inicia sesión y recibe el rol correspondiente.
+*   **Auditoría Activa:** Con cada acción (login, consulta, actualización), el interceptor global `AuditLogInterceptor` intercepta la petición y guarda de forma no modificable un registro en `logs_auditoria` con el `usuarioId` obtenido del JWT.
+*   **Visualización de Historial en Pantalla (NUEVO):** El usuario navega a la sección de "Actividad Reciente" o "Seguridad". El frontend realiza una petición a `GET /perfil/logs` y muestra en formato de tabla o lista ordenada cronológicamente las actividades asociadas a su cuenta (dirección IP, navegador, acción y fecha).
+*   **Cancelación ARCO:** El usuario solicita dar de baja su cuenta, lo cual anonimiza todos sus datos personales instantáneamente.
+
+---
+
+## 8. Validaciones
+
+Las validaciones a nivel de datos entrantes se realizan utilizando decoradores de `class-validator` en los DTOs de las peticiones.
+
+*   `RegisterDto`: Valida nombres, apellidos, correo único, fecha de nacimiento (`YYYY-MM-DD`), contraseña (mínimo 8 caracteres) y género.
+*   `LoginDto`: Valida correo y contraseña.
+*   `CrearConsentimientoDto`: Valida el nombre del servicio, concedido, excepción de ley y excepciones documentadas.
+
+---
+
+## 9. Relaciones entre Módulos
+
+El módulo `UsersModule` ahora importa `AuditLogsModule` para permitir inyectar `AuditLogsService` y exponer las consultas de logs del usuario en `UsersController`.
+
+---
+
+## 10. Resumen para el Desarrollador Frontend
+
+### Mapeo de Pantallas a Endpoints (Logs Incluidos)
+
+| Pantalla en Frontend | Acción de Usuario | Método y Endpoint | Datos a Enviar | Datos que Devuelve |
+| :--- | :--- | :--- | :--- | :--- |
+| **Registro** | Crear nueva cuenta | `POST /auth/registro` | `RegisterDto` (JSON completo) | `{ message: string, rol: string }` |
+| **Login** | Iniciar sesión | `POST /auth/login` | `LoginDto` (correo y password) | `{ rol: string }` (Establece cookie `access_token`) |
+| **Dashboard / Home** | Cargar sesión activa | `GET /perfil` | Ninguno (Headers con Token) | Datos del usuario logueado con relación de rol. |
+| **Actividad / Seguridad** | Ver logs de auditoría | `GET /perfil/logs` | Ninguno | Lista de logs de auditoría personal (`LogAuditoria[]`). |
+| **Panel Admin (Auditoría)** | Ver logs del sistema | `GET /perfil/todos/logs` | Ninguno | Lista de todos los logs registrados en el sistema. |
+| **Edición Perfil** | Rectificar información | `PATCH /perfil/actualizar` | Campos a modificar | `{ message: string, user: Usuario }` |
+| **Mi Cuenta** | Cancelar cuenta permanente | `DELETE /perfil/cancelar` | Ninguno | `{ message: string }` |
+| **Mi Cuenta** | Otorgar consentimiento | `POST /api-adapter/consentimientos` | `CrearConsentimientoDto` | `UsuarioConsentimiento` registrado. |
+
+### Arquitectura de Componentes Recomendada para Logs
+*   `UserActivityLogsComponent`: Componente de tabla con columnas `Fecha`, `Acción`, `Módulo`, `IP` y `Estado (Exitoso/Fallido)`. Carga los datos de `GET /perfil/logs`.
+*   `AdminAuditPanelComponent`: Panel con filtros avanzados por usuario, módulo o fecha, visible solo si el rol del usuario actual es `'admin'`. Consume `GET /perfil/todos/logs`.
+
+---
+
+## 11. Ejemplos de Consumo (JSON)
+
+### 1. Consultar Mis Logs de Auditoría
+*   **Petición:** `GET http://localhost:3000/perfil/logs`
+*   **Headers:**
+    *   `Authorization: Bearer <token_jwt>`
+*   **Respuesta (Response):**
+    ```json
+    [
+      {
+        "id": "154",
+        "usuarioId": "15",
+        "accion": "consultar_perfil",
+        "descripcion": "Consulta de perfil de usuario (ID de destino: 15)",
+        "modulo": "usuarios",
+        "entidadTipo": "usuario",
+        "entidadId": "15",
+        "ipOrigen": "127.0.0.1",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...",
+        "metodoHttp": "GET",
+        "endpoint": "/perfil",
+        "codigoRespuesta": 200,
+        "exitoso": true,
+        "creadoEn": "2026-07-09T16:03:00.000Z"
+      }
+    ]
+    ```
+
+---
+
+## 12. Recomendaciones
+
+### Solución a los Errores de Diseño Identificados en el Backend
+
+#### Corrección del Defecto en `JwtAuthGuard` vs `Cookies`
+Dado que el backend inyecta el token en la cookie HttpOnly `access_token` pero el Guard espera el token en el Header `Authorization`:
+*   **Solución en el Frontend:** Si el backend no se modifica, puedes solicitar al backend que retorne el `access_token` en el JSON del body de login, permitiéndote guardarlo en `sessionStorage` e inyectarlo en el Header de Axios/Fetch manualmente.
+*   **Si puedes modificar el Guard del Backend:** Cambia `extractTokenFromHeader` en `jwt-auth.guard.ts` para que revise `request.cookies?.['access_token']`.
+
+---
+
+## CONTEXTO PARA UN NUEVO CHAT (Resumen Autocontenido)
+
+Puedes copiar y pegar el siguiente bloque directamente en un nuevo chat de IA para desarrollar el frontend y saber cómo consumir los logs:
+
+```markdown
+### CONTEXTO TÉCNICO: BACKEND FIESTAPLAN (CON LOGS DE AUDITORÍA)
+
+Desarrollando el FRONTEND de "FiestaPlan" en base a un backend NestJS v11 + PostgreSQL 15 (TypeORM).
+
+1. TABLAS CLAVE Y VISTAS DE LOGS
+- usuarios: id (bigint), uuid (uuid), nombres, apellidos, correo, activo (boolean), rol_id (1:admin, 2:moderador, 3:usuario).
+- logs_auditoria: id (bigint), usuario_id, accion, descripcion, modulo, entidad_tipo, entidad_id, ip_origen, user_agent, metodo_http, endpoint, codigo_respuesta, exitoso (boolean), mensaje_error, creado_en.
+- usuario_consentimientos: id, usuario_id, servicio, concedido.
+
+2. ENDPOINTS DE LA API (RUTA BASE: http://localhost:3000)
+Autenticación:
+- POST /auth/registro -> Registro de nuevo usuario. Retorna: { message, rol }
+- POST /auth/login -> Login de usuario. Retorna: { rol } (Establece cookie HttpOnly 'access_token').
+- POST /auth/logout -> Logout. Limpia cookie 'access_token'.
+
+Perfil y Logs:
+- GET /perfil -> (JWT). Obtiene el perfil del usuario autenticado.
+- GET /perfil/logs -> (JWT). Devuelve los logs de auditoría del usuario actual (IP, Acción, Fecha, etc.) ordenados desc.
+- GET /perfil/todos/logs -> (JWT + Admin). Devuelve todos los logs de auditoría registrados en el sistema.
+- PATCH /perfil/actualizar -> (JWT). Modifica perfil. Retorna: { message, user }
+- DELETE /perfil/cancelar -> (JWT). Desactiva y anonimiza el usuario.
+- GET /perfil/todos -> (JWT + Admin/Moderador). Lista los perfiles existentes.
+
+API-Adapter (Integración de APIs de terceros):
+- POST /api-adapter/consentimientos -> (JWT). Registra el consentimiento para enviar datos.
+- POST /api-adapter/transferir -> (JWT). Proxy seguro hacia APIs externas.
+
+3. DETALLES DE INTEGRACIÓN
+- Solución al ID del Token: El token firmado ya incluye la propiedad 'id' además de 'sub' (uuid) y 'rol', de modo que req.user.id está disponible en el backend para realizar consultas a base de datos de logs de auditoría personales y auditoría de transferencias.
+- Autenticación: Recuerda configurar Axios con { withCredentials: true } para que viaje la cookie access_token, y de ser necesario, inyectar el Header de Authorization en formato Bearer si consumes endpoints desde dominios externos.
+```

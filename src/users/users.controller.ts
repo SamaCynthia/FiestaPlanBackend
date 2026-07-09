@@ -13,10 +13,27 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuditLog } from '../audit-logs/decorators/audit-log.decorator';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Controller('perfil')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('logs')
+  async verMisLogs(@Request() req) {
+    return this.auditLogsService.obtenerLogsPorUsuario(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('todos/logs')
+  async verTodosLosLogs() {
+    return this.auditLogsService.obtenerTodosLosLogs();
+  }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderador')
