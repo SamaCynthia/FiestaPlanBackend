@@ -22,6 +22,21 @@ export class RectificacionStrategy implements ArcoStrategy {
     if (datosNuevos.password) {
       usuario.password_hash = await bcrypt.hash(datosNuevos.password, 10);
     }
+    if (datosNuevos.foto_perfil_url !== undefined) {
+      usuario.foto_perfil_url = datosNuevos.foto_perfil_url;
+    }
+    if (datosNuevos.foto_perfil_data !== undefined) {
+      usuario.foto_perfil_data = datosNuevos.foto_perfil_data;
+    }
+    if (datosNuevos.foto_perfil_mime !== undefined) {
+      usuario.foto_perfil_mime = datosNuevos.foto_perfil_mime;
+    }
+    if (datosNuevos.telefono !== undefined) {
+      usuario.telefono = datosNuevos.telefono;
+    }
+    if (datosNuevos.ciudad_residencia !== undefined) {
+      usuario.ciudad_residencia = datosNuevos.ciudad_residencia;
+    }
 
     const actualizado = await repo.save(usuario);
     const { password_hash, ...resto } = actualizado;
