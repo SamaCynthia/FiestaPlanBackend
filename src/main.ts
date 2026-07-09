@@ -17,7 +17,11 @@ async function bootstrap() {
   // Simple memory-based rate limiting for login to prevent brute force (OWASP Top 10)
   const loginAttempts = new Map<string, { count: number; resetTime: number }>();
   app.use('/auth/login', (req: any, res: any, next: any) => {
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const ip =
+      req.ip ||
+      req.headers['x-forwarded-for'] ||
+      req.socket.remoteAddress ||
+      'unknown';
     const now = Date.now();
     const limit = 50; // max 50 requests
     const windowMs = 60 * 1000; // 1 minute window
@@ -41,14 +45,16 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: 'http://localhost:4200',
+    // origin: 'http://localhost:4200', // Para desarrollo local
+    origin: ['https://fiesta-plan-front.vercel.app'], // Para producción
     credentials: true,
   });
 
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: false,
+      // forbidNonWhitelisted: false, //Para desarrollo local
+      forbidNonWhitelisted: true, //Para producción
       transform: true,
     }),
   );
