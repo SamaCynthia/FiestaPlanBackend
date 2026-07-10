@@ -26,7 +26,7 @@ export class AuthController {
     res.cookie('access_token', access_token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 8 * 60 * 60 * 1000, // 8h, igual que JWT_EXPIRATION
     });
 
